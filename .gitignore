@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# 임시 처리 파일 (서버에서 자동 생성)
+/tmp/
+doson_ledger/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

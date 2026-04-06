@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>거래처 원장 자동 생성</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:    #2563eb;
+      --blue-dk: #1d4ed8;
+      --green:   #16a34a;
+      --red:     #dc2626;
+      --yellow:  #d97706;
+      --gray:    #6b7280;
+      --light:   #f3f4f6;
+      --border:  #e5e7eb;
+      --radius:  12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic',
+                   '맑은 고딕', sans-serif;
+      background: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 32px 16px 64px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 660px;
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+
+    /* ── 헤더 ── */
+    .header {
+      background: var(--blue);
+      color: #fff;
+      padding: 28px 32px 24px;
+    }
+    .header h1 { font-size: 1.4rem; font-weight: 700; }
+    .header p  { font-size: .88rem; opacity: .85; margin-top: 6px; line-height: 1.5; }
+
+    /* ── 섹션 공통 ── */
+    .section { padding: 28px 32px; }
+
+    /* ── 사용 안내 ── */
+    .guide {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+    }
+    .guide-title {
+      font-size: .88rem; font-weight: 700; color: var(--blue);
+      margin-bottom: 10px;
+    }
+    .guide ol {
+      padding-left: 20px; font-size: .85rem;
+      color: #1e40af; line-height: 1.8;
+    }
+    .guide ol li { margin-bottom: 2px; }
+    .guide kbd {
+      display: inline-block;
+      background: #fff; border: 1px solid #93c5fd;
+      border-radius: 4px; padding: 0 5px;
+      font-size: .8rem; font-family: monospace;
+    }
+
+    /* ── 붙여넣기 영역 ── */
+    .paste-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 8px;
+    }
+    .paste-label { font-size: .9rem; font-weight: 600; color: #374151; }
+    .paste-meta  { font-size: .82rem; color: var(--gray); }
+    .paste-meta.ready { color: var(--green); font-weight: 600; }
+
+    textarea {
+      width: 100%; height: 200px;
+      border: 2px solid var(--border);
+      border-radius: 10px; padding: 14px;
+      font-size: .82rem; font-family: monospace;
+      resize: vertical; outline: none;
+      transition: border-color .2s;
+      color: #374151; background: #fff;
+      line-height: 1.5;
+    }
+    textarea::placeholder { color: #9ca3af; }
+    textarea:focus { border-color: var(--blue); }
+    textarea.has-data { border-color: var(--green); background: #f0fdf4; }
+
+    .paste-actions {
+      display: flex; gap: 8px; margin-top: 8px; margin-bottom: 4px;
+    }
+    .btn-small {
+      padding: 6px 14px; border-radius: 6px; font-size: .82rem;
+      font-weight: 600; cursor: pointer; border: none;
+      transition: background .15s;
+    }
+    .btn-clear {
+      background: #f3f4f6; color: #6b7280;
+    }
+    .btn-clear:hover { background: #e5e7eb; }
+
+    /* ── 오류 박스 ── */
+    .error-box {
+      background: #fef2f2; border: 1px solid #fca5a5;
+      border-radius: 8px; padding: 14px 16px; margin-top: 14px;
+    }
+    .error-box .title { font-size: .88rem; font-weight: 700; color: var(--red); margin-bottom: 6px; }
+    .error-box p { font-size: .84rem; color: #991b1b; white-space: pre-wrap; }
+
+    /* ── 버튼 ── */
+    .btn {
+      display: block; width: 100%; padding: 14px;
+      border: none; border-radius: 8px; font-size: 1rem;
+      font-weight: 700; cursor: pointer; transition: background .2s, transform .1s;
+      text-align: center; text-decoration: none;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: var(--blue); color: #fff; margin-top: 16px; }
+    .btn-primary:hover { background: var(--blue-dk); }
+    .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; transform: none; }
+    .btn-green  { background: var(--green); color: #fff; margin-bottom: 12px; }
+    .btn-green:hover { background: #15803d; }
+    .btn-outline {
+      background: #fff; color: var(--blue);
+      border: 2px solid var(--blue); margin-top: 16px;
+    }
+    .btn-outline:hover { background: #eff6ff; }
+
+    /* ── 진행 ── */
+    #stateProcessing { display: none; }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: .88rem; color: var(--gray); margin-bottom: 8px;
+    }
+    .progress-bar {
+      height: 10px; background: var(--border);
+      border-radius: 99px; overflow: hidden; margin-bottom: 14px;
+    }
+    .progress-fill {
+      height: 100%; background: var(--blue);
+      border-radius: 99px; width: 0%;
+      transition: width .3s ease;
+    }
+    .current-label {
+      font-size: .85rem; color: var(--gray); text-align: center;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .spinner {
+      display: flex; justify-content: center; margin: 20px 0 8px;
+    }
+    .spinner::after {
+      content: '';
+      width: 36px; height: 36px;
+      border: 4px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── 결과 ── */
+    #stateResult { display: none; }
+    .result-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .result-header .check { font-size: 2rem; }
+    .result-header h2 { font-size: 1.1rem; font-weight: 700; color: #1e293b; }
+    .result-header p  { font-size: .84rem; color: var(--gray); margin-top: 2px; }
+
+    .file-list {
+      max-height: 340px; overflow-y: auto;
+      margin: 14px 0;
+      border: 1px solid var(--border); border-radius: 10px;
+    }
+    .file-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .file-item:last-child { border-bottom: none; }
+    .file-item:nth-child(even) { background: #f9fafb; }
+    .file-item .name { font-size: .88rem; color: #374151; word-break: break-all; }
+    .file-item .dl-btn {
+      flex-shrink: 0; padding: 5px 14px;
+      background: #eff6ff; color: var(--blue);
+      border: 1px solid #bfdbfe; border-radius: 6px;
+      font-size: .82rem; font-weight: 600;
+      text-decoration: none; margin-left: 10px;
+      white-space: nowrap;
+    }
+    .file-item .dl-btn:hover { background: #dbeafe; }
+
+    .warn-box {
+      background: #fffbeb; border: 1px solid #fcd34d;
+      border-radius: 8px; padding: 14px 16px; margin-top: 14px;
+    }
+    .warn-box .title { font-size: .88rem; font-weight: 700; color: var(--yellow); }
+    .warn-box ul { font-size: .82rem; color: #92400e; padding-left: 18px; margin-top: 6px; }
+
+    /* ── 반응형 ── */
+    @media (max-width: 480px) {
+      body { padding: 0 0 40px; }
+      .card { border-radius: 0; box-shadow: none; }
+      .header, .section { padding: 20px 18px; }
+      .header h1 { font-size: 1.2rem; }
+      textarea { height: 160px; }
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- 헤더 -->
+  <div class="header">
+    <h1>📊 거래처 원장 자동 생성</h1>
+    <p>엑셀에서 거래 데이터를 복사해 붙여넣으면<br>거래처별 원장 파일을 자동으로 만들어 드립니다.</p>
+  </div>
+
+  <!-- ① 붙여넣기 상태 -->
+  <div class="section" id="stateUpload">
+
+    <div class="guide">
+      <div class="guide-title">📋 사용 방법</div>
+      <ol>
+        <li>엑셀에서 거래 데이터 전체를 선택 <kbd>Ctrl</kbd>+<kbd>A</kbd></li>
+        <li>복사 <kbd>Ctrl</kbd>+<kbd>C</kbd></li>
+        <li>아래 입력창 클릭 후 붙여넣기 <kbd>Ctrl</kbd>+<kbd>V</kbd></li>
+        <li><strong>원장 생성 시작</strong> 버튼 클릭</li>
+      </ol>
+    </div>
+
+    <div class="paste-header">
+      <span class="paste-label">데이터 붙여넣기</span>
+      <span class="paste-meta" id="rowCount">데이터를 붙여넣어 주세요</span>
+    </div>
+
+    <textarea id="pasteArea"
+      placeholder="엑셀에서 복사한 데이터를 여기에 붙여넣으세요 (Ctrl+V)&#10;&#10;거래일자  구분  매출 거래처명  품목명  수량 ..."></textarea>
+
+    <div class="paste-actions">
+      <button class="btn-small btn-clear" onclick="clearPaste()">지우기</button>
+    </div>
+
+    <div class="error-box" id="pasteError" style="display:none;">
+      <div class="title">⚠️ 오류</div>
+      <p id="pasteErrorMsg"></p>
+    </div>
+
+    <button class="btn btn-primary" id="startBtn" disabled>
+      원장 생성 시작
+    </button>
+  </div>
+
+  <!-- ② 처리 중 -->
+  <div class="section" id="stateProcessing">
+    <div class="spinner"></div>
+    <div class="progress-label">
+      <span>처리 중...</span>
+      <span id="progressCount">0 / 0</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="current-label" id="currentLabel">잠시만 기다려 주세요...</div>
+  </div>
+
+  <!-- ③ 결과 -->
+  <div class="section" id="stateResult">
+    <div class="result-header">
+      <div class="check">✅</div>
+      <div>
+        <h2 id="resultTitle">완료!</h2>
+        <p id="resultSub"></p>
+      </div>
+    </div>
+
+    <a class="btn btn-green" id="zipBtn" href="#">
+      ⬇️ 전체 다운로드 (ZIP)
+    </a>
+
+    <div class="file-list" id="fileList"></div>
+
+    <div id="warnBox" class="warn-box" style="display:none">
+      <div class="title">⚠️ 일부 거래처 처리 실패</div>
+      <ul id="warnList"></ul>
+    </div>
+
+    <button class="btn btn-outline" onclick="reset()">↩ 새 데이터 처리하기</button>
+  </div>
+
+</div>
+
+<script>
+  const pasteArea   = document.getElementById('pasteArea');
+  const rowCount    = document.getElementById('rowCount');
+  const startBtn    = document.getElementById('startBtn');
+  const pasteError  = document.getElementById('pasteError');
+  const pasteErrorMsg = document.getElementById('pasteErrorMsg');
+
+  const stateUpload     = document.getElementById('stateUpload');
+  const stateProcessing = document.getElementById('stateProcessing');
+  const stateResult     = document.getElementById('stateResult');
+
+  const progressCount = document.getElementById('progressCount');
+  const progressFill  = document.getElementById('progressFill');
+  const currentLabel  = document.getElementById('currentLabel');
+
+  const resultTitle = document.getElementById('resultTitle');
+  const resultSub   = document.getElementById('resultSub');
+  const zipBtn      = document.getElementById('zipBtn');
+  const fileList    = document.getElementById('fileList');
+  const warnBox     = document.getElementById('warnBox');
+  const warnList    = document.getElementById('warnList');
+
+  let sessionId = null;
+
+  /* ── 붙여넣기 감지 ── */
+  pasteArea.addEventListener('input', updateMeta);
+  pasteArea.addEventListener('paste', () => setTimeout(updateMeta, 50));
+
+  function updateMeta() {
+    const text = pasteArea.value.trim();
+    if (!text) {
+      rowCount.textContent = '데이터를 붙여넣어 주세요';
+      rowCount.className = 'paste-meta';
+      pasteArea.className = '';
+      startBtn.disabled = true;
+      return;
+    }
+    const lines = text.split('\n').filter(l => l.trim());
+    const dataRows = Math.max(0, lines.length - 1); // 헤더 제외
+    rowCount.textContent = `✔ ${dataRows}건 감지됨`;
+    rowCount.className = 'paste-meta ready';
+    pasteArea.className = 'has-data';
+    startBtn.disabled = false;
+    hidePasteError();
+  }
+
+  function clearPaste() {
+    pasteArea.value = '';
+    updateMeta();
+  }
+
+  function showPasteError(msg) {
+    pasteErrorMsg.textContent = msg;
+    pasteError.style.display = 'block';
+  }
+  function hidePasteError() {
+    pasteError.style.display = 'none';
+  }
+
+  /* ── 처리 시작 ── */
+  startBtn.addEventListener('click', async () => {
+    const text = pasteArea.value.trim();
+    if (!text) return;
+
+    hidePasteError();
+    startBtn.disabled = true;
+    startBtn.textContent = '분석 중...';
+
+    let res;
+    try {
+      res = await fetch('/paste', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+    } catch {
+      showPasteError('서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+      startBtn.disabled = false;
+      startBtn.textContent = '원장 생성 시작';
+      return;
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      showPasteError(data.error || '오류가 발생했습니다.');
+      startBtn.disabled = false;
+      startBtn.textContent = '원장 생성 시작';
+      return;
+    }
+
+    sessionId = data.session_id;
+    // 파싱된 행 수 표시
+    if (data.parsed_rows) {
+      currentLabel.textContent = `데이터 ${data.parsed_rows}건 인식 완료, 거래처별 원장 생성 중...`;
+    }
+    switchState('processing');
+    startSSE();
+  });
+
+  /* ── SSE 진행 스트림 ── */
+  function startSSE() {
+    const es = new EventSource('/progress/' + sessionId);
+
+    es.onmessage = e => {
+      const d = JSON.parse(e.data);
+
+      if (d.error) {
+        es.close();
+        switchState('upload');
+        showPasteError(d.error);
+        startBtn.disabled = false;
+        startBtn.textContent = '원장 생성 시작';
+        return;
+      }
+
+      if (d.total > 0) {
+        const pct = Math.round((d.done / d.total) * 100);
+        progressFill.style.width = pct + '%';
+        progressCount.textContent = d.done + ' / ' + d.total;
+      }
+      if (d.current) {
+        currentLabel.textContent = '처리 중: ' + d.current;
+      }
+
+      if (d.finished) {
+        es.close();
+        showResult(d);
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      switchState('upload');
+      showPasteError('처리 중 연결이 끊겼습니다. 다시 시도해 주세요.');
+      startBtn.disabled = false;
+      startBtn.textContent = '원장 생성 시작';
+    };
+  }
+
+  /* ── 결과 표시 ── */
+  function showResult(d) {
+    const total = d.files ? d.files.length : 0;
+    resultTitle.textContent = `완료! ${total}개 거래처 원장이 생성되었습니다.`;
+    const parts = [];
+    if (d.year && d.month) parts.push(`${d.year}년 ${d.month}월`);
+    if (d.parsed_rows)    parts.push(`총 ${d.parsed_rows}건 처리`);
+    resultSub.textContent = parts.join('  ·  ');
+
+    zipBtn.href = '/download-zip/' + sessionId;
+
+    fileList.innerHTML = '';
+    (d.files || []).forEach(fname => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = `
+        <span class="name">📄 ${fname}</span>
+        <a class="dl-btn" href="/download/${sessionId}/${encodeURIComponent(fname)}" download>다운로드</a>
+      `;
+      fileList.appendChild(item);
+    });
+
+    if (d.errors && d.errors.length > 0) {
+      warnList.innerHTML = d.errors.map(e => `<li>${e}</li>`).join('');
+      warnBox.style.display = 'block';
+    } else {
+      warnBox.style.display = 'none';
+    }
+
+    switchState('result');
+  }
+
+  /* ── 상태 전환 ── */
+  function switchState(state) {
+    stateUpload.style.display     = state === 'upload'     ? 'block' : 'none';
+    stateProcessing.style.display = state === 'processing' ? 'block' : 'none';
+    stateResult.style.display     = state === 'result'     ? 'block' : 'none';
+  }
+
+  function reset() {
+    sessionId = null;
+    pasteArea.value = '';
+    updateMeta();
+    startBtn.textContent = '원장 생성 시작';
+    progressFill.style.width = '0%';
+    progressCount.textContent = '0 / 0';
+    currentLabel.textContent = '잠시만 기다려 주세요...';
+    hidePasteError();
+    switchState('upload');
+  }
+
+  switchState('upload');
+</script>
+</body>
+</html>
