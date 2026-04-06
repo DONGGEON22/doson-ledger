@@ -260,11 +260,21 @@ def progress(sid):
             yield f"data: {json.dumps(state, ensure_ascii=False)}\n\n"
             if state.get('finished') or state.get('error'):
                 break
-            time.sleep(0.3)
+            time.sleep(0.1)   # 0.3 → 0.1: 전체 SSE 연결 시간 단축
 
     return Response(stream_with_context(stream()),
                     mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+@app.route('/status/<sid>')
+def status(sid):
+    """SSE 연결이 끊겼을 때 프론트가 폴링으로 상태를 확인하는 엔드포인트"""
+    with _LOCK:
+        state = dict(SESSIONS.get(sid, {}))
+    if not state:
+        return jsonify(error='세션을 찾을 수 없습니다.'), 404
+    return jsonify(state)
 
 
 @app.route('/download/<sid>/<path:filename>')

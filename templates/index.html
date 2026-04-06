@@ -403,43 +403,83 @@
   });
 
   /* ── SSE 진행 스트림 ── */
+  function applyProgress(d) {
+    if (d.total > 0) {
+      const pct = Math.round((d.done / d.total) * 100);
+      progressFill.style.width = pct + '%';
+      progressCount.textContent = d.done + ' / ' + d.total;
+    }
+    if (d.current) {
+      currentLabel.textContent = '처리 중: ' + d.current;
+    }
+  }
+
+  /* SSE가 끊기면 폴링으로 전환해 결과를 기다림 */
+  function startPolling() {
+    currentLabel.textContent = '서버 응답 대기 중… (잠시만 기다려 주세요)';
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch('/status/' + sessionId);
+        if (!res.ok) return;
+        const d = await res.json();
+        applyProgress(d);
+        if (d.error) {
+          clearInterval(timer);
+          switchState('upload');
+          showPasteError(d.error);
+          startBtn.disabled = false;
+          startBtn.textContent = '원장 생성 시작';
+        } else if (d.finished) {
+          clearInterval(timer);
+          showResult(d);
+        }
+      } catch (_) { /* 네트워크 일시 오류 → 다음 interval에 재시도 */ }
+    }, 2000);   // 2초마다 폴링
+  }
+
   function startSSE() {
-    const es = new EventSource('/progress/' + sessionId);
+    let retryCount = 0;
+    const MAX_RETRY = 3;
 
-    es.onmessage = e => {
-      const d = JSON.parse(e.data);
+    function connect() {
+      const es = new EventSource('/progress/' + sessionId);
 
-      if (d.error) {
+      es.onmessage = e => {
+        retryCount = 0;   // 메시지 수신 성공 시 재시도 카운터 초기화
+        const d = JSON.parse(e.data);
+
+        if (d.error) {
+          es.close();
+          switchState('upload');
+          showPasteError(d.error);
+          startBtn.disabled = false;
+          startBtn.textContent = '원장 생성 시작';
+          return;
+        }
+
+        applyProgress(d);
+
+        if (d.finished) {
+          es.close();
+          showResult(d);
+        }
+      };
+
+      es.onerror = () => {
         es.close();
-        switchState('upload');
-        showPasteError(d.error);
-        startBtn.disabled = false;
-        startBtn.textContent = '원장 생성 시작';
-        return;
-      }
+        retryCount++;
+        if (retryCount <= MAX_RETRY) {
+          // 연결 끊김 → 2초 후 SSE 재연결 시도
+          currentLabel.textContent = `연결 재시도 중… (${retryCount}/${MAX_RETRY})`;
+          setTimeout(connect, 2000);
+        } else {
+          // 재연결 3회 실패 → 폴링으로 전환 (서버 처리는 계속 진행 중)
+          startPolling();
+        }
+      };
+    }
 
-      if (d.total > 0) {
-        const pct = Math.round((d.done / d.total) * 100);
-        progressFill.style.width = pct + '%';
-        progressCount.textContent = d.done + ' / ' + d.total;
-      }
-      if (d.current) {
-        currentLabel.textContent = '처리 중: ' + d.current;
-      }
-
-      if (d.finished) {
-        es.close();
-        showResult(d);
-      }
-    };
-
-    es.onerror = () => {
-      es.close();
-      switchState('upload');
-      showPasteError('처리 중 연결이 끊겼습니다. 다시 시도해 주세요.');
-      startBtn.disabled = false;
-      startBtn.textContent = '원장 생성 시작';
-    };
+    connect();
   }
 
   /* ── 결과 표시 ── */
