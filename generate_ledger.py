@@ -223,7 +223,8 @@ def create_ledger(customer, rows_df, year, month, col_map, output_dir):
     fname = safe_filename(customer) + '.xlsx'
     out_path = os.path.join(output_dir, fname)
     wb.save(out_path)
-    wb.close()   # ← 워크북 메모리 즉시 해제 (누락 시 고객수만큼 메모리 누수)
+    wb.close()
+    del wb   # ← 참조 즉시 제거 → GC가 메모리 회수
     return out_path
 
 
