@@ -39,7 +39,6 @@
       overflow: hidden;
     }
 
-    /* ── 헤더 ── */
     .header {
       background: var(--blue);
       color: #fff;
@@ -48,10 +47,8 @@
     .header h1 { font-size: 1.4rem; font-weight: 700; }
     .header p  { font-size: .88rem; opacity: .85; margin-top: 6px; line-height: 1.5; }
 
-    /* ── 섹션 공통 ── */
     .section { padding: 28px 32px; }
 
-    /* ── 사용 안내 ── */
     .guide {
       background: #eff6ff;
       border: 1px solid #bfdbfe;
@@ -75,7 +72,6 @@
       font-size: .8rem; font-family: monospace;
     }
 
-    /* ── 붙여넣기 영역 ── */
     .paste-header {
       display: flex; align-items: center;
       justify-content: space-between; margin-bottom: 8px;
@@ -111,15 +107,13 @@
     }
     .btn-clear:hover { background: #e5e7eb; }
 
-    /* ── 오류 박스 ── */
     .error-box {
       background: #fef2f2; border: 1px solid #fca5a5;
       border-radius: 8px; padding: 14px 16px; margin-top: 14px;
     }
     .error-box .title { font-size: .88rem; font-weight: 700; color: var(--red); margin-bottom: 6px; }
-    .error-box p { font-size: .84rem; color: #991b1b; white-space: pre-wrap; }
+    .error-box p { font-size: .84rem; color: #991b1b; white-space: pre-wrap; word-break: break-all; }
 
-    /* ── 버튼 ── */
     .btn {
       display: block; width: 100%; padding: 14px;
       border: none; border-radius: 8px; font-size: 1rem;
@@ -138,7 +132,6 @@
     }
     .btn-outline:hover { background: #eff6ff; }
 
-    /* ── 진행 ── */
     #stateProcessing { display: none; }
     .progress-label {
       display: flex; justify-content: space-between;
@@ -170,7 +163,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── 결과 ── */
     #stateResult { display: none; }
     .result-header {
       display: flex; align-items: center; gap: 12px;
@@ -210,7 +202,6 @@
     .warn-box .title { font-size: .88rem; font-weight: 700; color: var(--yellow); }
     .warn-box ul { font-size: .82rem; color: #92400e; padding-left: 18px; margin-top: 6px; }
 
-    /* ── 반응형 ── */
     @media (max-width: 480px) {
       body { padding: 0 0 40px; }
       .card { border-radius: 0; box-shadow: none; }
@@ -223,15 +214,13 @@
 <body>
 <div class="card">
 
-  <!-- 헤더 -->
   <div class="header">
     <h1>📊 거래처 원장 자동 생성</h1>
     <p>엑셀에서 거래 데이터를 복사해 붙여넣으면<br>거래처별 원장 파일을 자동으로 만들어 드립니다.</p>
   </div>
 
-  <!-- ① 붙여넣기 상태 -->
+  <!-- ① 붙여넣기 -->
   <div class="section" id="stateUpload">
-
     <div class="guide">
       <div class="guide-title">📋 사용 방법</div>
       <ol>
@@ -304,162 +293,246 @@
 </div>
 
 <script>
-  const pasteArea   = document.getElementById('pasteArea');
-  const rowCount    = document.getElementById('rowCount');
-  const startBtn    = document.getElementById('startBtn');
-  const pasteError  = document.getElementById('pasteError');
-  const pasteErrorMsg = document.getElementById('pasteErrorMsg');
+const pasteArea   = document.getElementById('pasteArea');
+const rowCount    = document.getElementById('rowCount');
+const startBtn    = document.getElementById('startBtn');
+const pasteError  = document.getElementById('pasteError');
+const pasteErrorMsg = document.getElementById('pasteErrorMsg');
 
-  const stateUpload     = document.getElementById('stateUpload');
-  const stateProcessing = document.getElementById('stateProcessing');
-  const stateResult     = document.getElementById('stateResult');
+const stateUpload     = document.getElementById('stateUpload');
+const stateProcessing = document.getElementById('stateProcessing');
+const stateResult     = document.getElementById('stateResult');
 
-  const progressCount = document.getElementById('progressCount');
-  const progressFill  = document.getElementById('progressFill');
-  const currentLabel  = document.getElementById('currentLabel');
+const progressCount = document.getElementById('progressCount');
+const progressFill  = document.getElementById('progressFill');
+const currentLabel  = document.getElementById('currentLabel');
 
-  const resultTitle = document.getElementById('resultTitle');
-  const resultSub   = document.getElementById('resultSub');
-  const zipBtn      = document.getElementById('zipBtn');
-  const fileList    = document.getElementById('fileList');
-  const warnBox     = document.getElementById('warnBox');
-  const warnList    = document.getElementById('warnList');
+const resultTitle = document.getElementById('resultTitle');
+const resultSub   = document.getElementById('resultSub');
+const zipBtn      = document.getElementById('zipBtn');
+const fileList    = document.getElementById('fileList');
+const warnBox     = document.getElementById('warnBox');
+const warnList    = document.getElementById('warnList');
 
-  let sessionId = null;
+let sessionId = null;
 
-  /* ── 붙여넣기 감지 ── */
-  pasteArea.addEventListener('input', updateMeta);
-  pasteArea.addEventListener('paste', () => setTimeout(updateMeta, 50));
+/* ── 붙여넣기 감지 ── */
+pasteArea.addEventListener('input', updateMeta);
+pasteArea.addEventListener('paste', () => setTimeout(updateMeta, 50));
 
-  function updateMeta() {
-    const text = pasteArea.value.trim();
-    if (!text) {
-      rowCount.textContent = '데이터를 붙여넣어 주세요';
-      rowCount.className = 'paste-meta';
-      pasteArea.className = '';
-      startBtn.disabled = true;
-      return;
-    }
-    const lines = text.split('\n').filter(l => l.trim());
-    const dataRows = Math.max(0, lines.length - 1); // 헤더 제외
-    rowCount.textContent = `✔ ${dataRows}건 감지됨`;
-    rowCount.className = 'paste-meta ready';
-    pasteArea.className = 'has-data';
-    startBtn.disabled = false;
-    hidePasteError();
-  }
-
-  function clearPaste() {
-    pasteArea.value = '';
-    updateMeta();
-  }
-
-  function showPasteError(msg) {
-    pasteErrorMsg.textContent = msg;
-    pasteError.style.display = 'block';
-  }
-
-  function hidePasteError() {
-    pasteError.style.display = 'none';
-  }
-
-  /* ── 처리 시작 ── */
-  startBtn.addEventListener('click', async () => {
-    const text = pasteArea.value.trim();
-    if (!text) return;
-
-    hidePasteError();
+function updateMeta() {
+  const text = pasteArea.value.trim();
+  if (!text) {
+    rowCount.textContent = '데이터를 붙여넣어 주세요';
+    rowCount.className = 'paste-meta';
+    pasteArea.className = '';
     startBtn.disabled = true;
-    switchState('processing');
+    return;
+  }
+  const lines = text.split('\n').filter(l => l.trim());
+  const dataRows = Math.max(0, lines.length - 1);
+  rowCount.textContent = `✔ ${dataRows}건 감지됨`;
+  rowCount.className = 'paste-meta ready';
+  pasteArea.className = 'has-data';
+  startBtn.disabled = false;
+  hidePasteError();
+}
 
-    // 처리 중 안내 메시지
-    const lines = text.split('\n').filter(l => l.trim());
-    currentLabel.textContent = `데이터 ${Math.max(0, lines.length - 1)}건 처리 중… 창을 닫지 마세요.`;
-    progressFill.style.width = '0%';
-    progressCount.textContent = '';
+function clearPaste() {
+  pasteArea.value = '';
+  updateMeta();
+}
 
-    // 서버에서 처리 완료될 때까지 대기 (동기 처리, SSE 없음)
-    let data;
+function showPasteError(msg) {
+  pasteErrorMsg.textContent = msg;
+  pasteError.style.display = 'block';
+}
+
+function hidePasteError() {
+  pasteError.style.display = 'none';
+}
+
+/* ── 처리 시작 ── */
+startBtn.addEventListener('click', async () => {
+  const text = pasteArea.value.trim();
+  if (!text) return;
+
+  hidePasteError();
+  startBtn.disabled = true;
+  startBtn.textContent = '분석 중...';
+
+  let res, raw;
+  try {
+    res = await fetch('/paste', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    raw = await res.text();
+  } catch {
+    showPasteError('서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+    startBtn.disabled = false;
+    startBtn.textContent = '원장 생성 시작';
+    return;
+  }
+
+  let data;
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    const preview = (raw || '').trim().slice(0, 800);
+    showPasteError(
+      preview
+        ? `서버 응답을 파싱할 수 없습니다 (HTTP ${res.status}):\n${preview}`
+        : `서버 응답이 비어 있습니다 (HTTP ${res.status})`
+    );
+    startBtn.disabled = false;
+    startBtn.textContent = '원장 생성 시작';
+    return;
+  }
+
+  if (!res.ok) {
+    showPasteError(data.error || `요청 실패 (HTTP ${res.status})`);
+    startBtn.disabled = false;
+    startBtn.textContent = '원장 생성 시작';
+    return;
+  }
+
+  sessionId = data.session_id;
+  if (data.parsed_rows) {
+    currentLabel.textContent = `데이터 ${data.parsed_rows}건 인식 완료, 거래처별 원장 생성 중...`;
+  }
+  switchState('processing');
+  startSSE();
+});
+
+/* ── 진행 표시 ── */
+function applyProgress(d) {
+  if (d.total > 0) {
+    const pct = Math.round((d.done / d.total) * 100);
+    progressFill.style.width = pct + '%';
+    progressCount.textContent = d.done + ' / ' + d.total;
+  }
+  if (d.current) currentLabel.textContent = '처리 중: ' + d.current;
+}
+
+/* SSE 끊기면 폴링으로 전환 */
+function startPolling() {
+  currentLabel.textContent = '서버 응답 대기 중… (잠시만 기다려 주세요)';
+  const timer = setInterval(async () => {
     try {
-      const res = await fetch('/paste', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-
-      // 서버가 HTML 에러 페이지를 반환하는 경우 대비
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        const html = await res.text();
-        throw new Error('서버 오류가 발생했습니다. (상태 코드: ' + res.status + ')');
+      const res = await fetch('/status/' + sessionId);
+      if (!res.ok) return;
+      const d = await res.json();
+      applyProgress(d);
+      if (d.error) {
+        clearInterval(timer);
+        switchState('upload');
+        showPasteError(d.error);
+        startBtn.disabled = false;
+        startBtn.textContent = '원장 생성 시작';
+      } else if (d.finished) {
+        clearInterval(timer);
+        showResult(d);
       }
+    } catch (_) {}
+  }, 2000);
+}
 
-      data = await res.json();
-      if (!res.ok) throw new Error(data.error || '서버 오류가 발생했습니다.');
-    } catch (e) {
-      switchState('upload');
-      showPasteError(e.message || '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.');
-      startBtn.disabled = false;
-      return;
-    }
+function startSSE() {
+  let retryCount = 0;
+  const MAX_RETRY = 5;
 
-    sessionId = data.session_id;
-    showResult(data);
+  function connect() {
+    const es = new EventSource('/progress/' + sessionId);
+
+    es.onmessage = e => {
+      retryCount = 0;
+      const d = JSON.parse(e.data);
+      if (d.error) {
+        es.close();
+        switchState('upload');
+        showPasteError(d.error);
+        startBtn.disabled = false;
+        startBtn.textContent = '원장 생성 시작';
+        return;
+      }
+      applyProgress(d);
+      if (d.finished) {
+        es.close();
+        showResult(d);
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      retryCount++;
+      if (retryCount <= MAX_RETRY) {
+        currentLabel.textContent = `연결 재시도 중… (${retryCount}/${MAX_RETRY})`;
+        setTimeout(connect, 2000);
+      } else {
+        startPolling();
+      }
+    };
+  }
+
+  connect();
+}
+
+/* ── 결과 표시 ── */
+function showResult(d) {
+  const total = d.files ? d.files.length : 0;
+  resultTitle.textContent = `완료! ${total}개 거래처 원장이 생성되었습니다.`;
+  const parts = [];
+  if (d.year && d.month) parts.push(`${d.year}년 ${d.month}월`);
+  if (d.parsed_rows)     parts.push(`총 ${d.parsed_rows}건 처리`);
+  resultSub.textContent = parts.join('  ·  ');
+
+  zipBtn.href = '/download-zip/' + sessionId;
+
+  fileList.innerHTML = '';
+  (d.files || []).forEach(fname => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    item.innerHTML = `
+      <span class="name">📄 ${fname}</span>
+      <a class="dl-btn" href="/download/${sessionId}/${encodeURIComponent(fname)}" download>다운로드</a>
+    `;
+    fileList.appendChild(item);
   });
 
-  /* ── 결과 표시 ── */
-  function showResult(d) {
-    const total = d.files ? d.files.length : 0;
-    resultTitle.textContent = `완료! ${total}개 거래처 원장이 생성되었습니다.`;
-    const parts = [];
-    if (d.year && d.month) parts.push(`${d.year}년 ${d.month}월`);
-    if (d.parsed_rows)     parts.push(`총 ${d.parsed_rows}건 처리`);
-    resultSub.textContent = parts.join('  ·  ');
-
-    zipBtn.href = '/download-zip/' + sessionId;
-
-    fileList.innerHTML = '';
-    (d.files || []).forEach(fname => {
-      const item = document.createElement('div');
-      item.className = 'file-item';
-      item.innerHTML = `
-        <span class="name">📄 ${fname}</span>
-        <a class="dl-btn" href="/download/${sessionId}/${encodeURIComponent(fname)}" download>다운로드</a>
-      `;
-      fileList.appendChild(item);
-    });
-
-    if (d.errors && d.errors.length > 0) {
-      warnList.innerHTML = d.errors.map(e => `<li>${e}</li>`).join('');
-      warnBox.style.display = 'block';
-    } else {
-      warnBox.style.display = 'none';
-    }
-
-    startBtn.disabled = false;
-    switchState('result');
+  if (d.errors && d.errors.length > 0) {
+    warnList.innerHTML = d.errors.map(e => `<li>${e}</li>`).join('');
+    warnBox.style.display = 'block';
+  } else {
+    warnBox.style.display = 'none';
   }
 
-  /* ── 상태 전환 ── */
-  function switchState(state) {
-    stateUpload.style.display     = state === 'upload'     ? 'block' : 'none';
-    stateProcessing.style.display = state === 'processing' ? 'block' : 'none';
-    stateResult.style.display     = state === 'result'     ? 'block' : 'none';
-  }
+  startBtn.disabled = false;
+  startBtn.textContent = '원장 생성 시작';
+  switchState('result');
+}
 
-  function reset() {
-    sessionId = null;
-    pasteArea.value = '';
-    updateMeta();
-    startBtn.textContent = '원장 생성 시작';
-    progressFill.style.width = '0%';
-    progressCount.textContent = '0 / 0';
-    currentLabel.textContent = '잠시만 기다려 주세요...';
-    hidePasteError();
-    switchState('upload');
-  }
+/* ── 상태 전환 ── */
+function switchState(state) {
+  stateUpload.style.display     = state === 'upload'     ? 'block' : 'none';
+  stateProcessing.style.display = state === 'processing' ? 'block' : 'none';
+  stateResult.style.display     = state === 'result'     ? 'block' : 'none';
+}
 
+function reset() {
+  sessionId = null;
+  pasteArea.value = '';
+  updateMeta();
+  startBtn.textContent = '원장 생성 시작';
+  progressFill.style.width = '0%';
+  progressCount.textContent = '0 / 0';
+  currentLabel.textContent = '잠시만 기다려 주세요...';
+  hidePasteError();
   switchState('upload');
+}
+
+switchState('upload');
 </script>
 </body>
 </html>
