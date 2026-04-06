@@ -5,7 +5,7 @@
 브라우저: http://localhost:5001
 """
 
-import os, uuid, threading, zipfile, io, time, json, tempfile, shutil, csv, re
+import os, uuid, threading, zipfile, io, time, json, tempfile, shutil, csv, re, gc
 from flask import (Flask, render_template, request, jsonify,
                    send_from_directory, Response, stream_with_context)
 import pandas as pd
@@ -110,6 +110,28 @@ def session_dir(sid):
 def output_dir(sid):
     return os.path.join(session_dir(sid), 'output')
 
+def _state_path(sid):
+    return os.path.join(session_dir(sid), 'state.json')
+
+def _save_state(sid):
+    """세션 상태를 디스크에 저장 — 워커 재시작 후에도 복구 가능"""
+    try:
+        with _LOCK:
+            state = dict(SESSIONS.get(sid, {}))
+        os.makedirs(session_dir(sid), exist_ok=True)
+        with open(_state_path(sid), 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+def _load_state(sid):
+    """메모리에 세션이 없을 때 디스크에서 복구"""
+    try:
+        with open(_state_path(sid), 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 자동 정리 (2시간 이상 된 세션 삭제)
@@ -140,6 +162,7 @@ def _run_processing(sid, df):
     def update(**kw):
         with _LOCK:
             SESSIONS[sid].update(kw)
+        _save_state(sid)   # 매 업데이트마다 디스크에도 저장
     try:
         if not os.path.isfile(gl.TEMPLATE_PATH):
             update(error=f"템플릿 파일을 찾을 수 없습니다:\n{gl.TEMPLATE_PATH}")
@@ -155,7 +178,6 @@ def _run_processing(sid, df):
         year, month = gl.detect_year_month(df, col_map)
 
         # 빈 거래처명 제거 후 그룹핑
-        # reset_index: groupby 후 각 그룹의 행 인덱스가 불연속해지는 것 방지
         df_clean = df[df[customer_col].str.strip() != ''].copy().reset_index(drop=True)
         groups = list(df_clean.groupby(customer_col, sort=True))
         update(total=len(groups), year=year, month=month,
@@ -175,6 +197,10 @@ def _run_processing(sid, df):
                                  year, month, col_map, out)
             except Exception as e:
                 errors.append(f"{customer}: {e}")
+
+            # 10개마다 가비지 컬렉션 — openpyxl 워크북 메모리 강제 회수
+            if i % 10 == 0:
+                gc.collect()
 
         files = sorted(os.listdir(out))
         update(finished=True, files=files, errors=errors)
@@ -269,11 +295,23 @@ def progress(sid):
 
 @app.route('/status/<sid>')
 def status(sid):
-    """SSE 연결이 끊겼을 때 프론트가 폴링으로 상태를 확인하는 엔드포인트"""
+    """SSE 연결이 끊겼을 때 프론트가 폴링으로 상태를 확인하는 엔드포인트.
+    메모리에 세션이 없으면 디스크에서 복구 시도."""
     with _LOCK:
         state = dict(SESSIONS.get(sid, {}))
+
+    if not state:
+        # 워커 재시작 등으로 메모리 유실 시 디스크에서 복구
+        state = _load_state(sid)
+
     if not state:
         return jsonify(error='세션을 찾을 수 없습니다.'), 404
+
+    # 복구된 상태를 메모리에도 재등록
+    if sid not in SESSIONS:
+        with _LOCK:
+            SESSIONS[sid] = state
+
     return jsonify(state)
 
 
