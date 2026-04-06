@@ -158,31 +158,42 @@ def index():
     return render_template('index.html')
 
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Flask 내 모든 예외를 JSON으로 반환 — HTML 에러 페이지 방지"""
+    import traceback
+    return jsonify(error=f'{e}\n{traceback.format_exc()}'), 500
+
+
 @app.route('/paste', methods=['POST'])
 def paste():
-    body = request.get_json(silent=True) or {}
-    text = (body.get('text') or '').strip()
-    if not text:
-        return jsonify(error='데이터가 없습니다. 엑셀에서 복사 후 붙여넣어 주세요.'), 400
+    try:
+        body = request.get_json(silent=True) or {}
+        text = (body.get('text') or '').strip()
+        if not text:
+            return jsonify(error='데이터가 없습니다. 엑셀에서 복사 후 붙여넣어 주세요.'), 400
 
-    df, nrows = parse_tsv(text)
-    if df is None or nrows == 0:
-        return jsonify(error='데이터를 인식할 수 없습니다. 엑셀에서 헤더 포함 전체를 복사해 주세요.'), 400
+        df, nrows = parse_tsv(text)
+        if df is None or nrows == 0:
+            return jsonify(error='데이터를 인식할 수 없습니다. 엑셀에서 헤더 포함 전체를 복사해 주세요.'), 400
 
-    result = process_all(df)   # ← 동기 처리 (완료될 때까지 대기)
+        result = process_all(df)   # ← 동기 처리 (완료될 때까지 대기)
 
-    if 'error' in result:
-        return jsonify(error=result['error']), 500
+        if 'error' in result:
+            return jsonify(error=result['error']), 500
 
-    return jsonify(
-        session_id=result['session_id'],
-        files=result['files'],
-        year=result['year'],
-        month=result['month'],
-        parsed_rows=nrows,
-        total=result['total'],
-        errors=result['errors'],
-    )
+        return jsonify(
+            session_id=result['session_id'],
+            files=result['files'],
+            year=result['year'],
+            month=result['month'],
+            parsed_rows=nrows,
+            total=result['total'],
+            errors=result['errors'],
+        )
+    except Exception as e:
+        import traceback
+        return jsonify(error=f'{e}\n{traceback.format_exc()}'), 500
 
 
 @app.route('/download/<sid>/<path:filename>')

@@ -386,6 +386,14 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
+
+      // 서버가 HTML 에러 페이지를 반환하는 경우 대비
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const html = await res.text();
+        throw new Error('서버 오류가 발생했습니다. (상태 코드: ' + res.status + ')');
+      }
+
       data = await res.json();
       if (!res.ok) throw new Error(data.error || '서버 오류가 발생했습니다.');
     } catch (e) {
